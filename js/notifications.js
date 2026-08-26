@@ -1,24 +1,32 @@
 import { supabase } from './supabase.js';
 
-export async function loadNotifications({ limit = 20 } = {}) {
-  const { data, error } = await supabase.from('notifications').select('id,title,message,type,action_label,action_url,is_read,is_dismissed,created_at').eq('is_dismissed', false).order('created_at', { ascending: false }).limit(limit);
+export async function loadNotifications({ limit = 20, userId } = {}) {
+  let query = supabase.from('notifications').select('id,user_id,title,message,type,action_label,action_url,is_read,is_dismissed,created_at,image_url').eq('is_dismissed', false).order('created_at', { ascending: false }).limit(limit);
+  if (userId) query = query.eq('user_id', userId);
+  const { data, error } = await query;
   if (error) throw error;
   return data || [];
 }
 
-export async function getUnreadCount() {
-  const { count, error } = await supabase.from('notifications').select('id', { count: 'exact', head: true }).eq('is_dismissed', false).eq('is_read', false);
+export async function getUnreadCount(userId) {
+  let query = supabase.from('notifications').select('id', { count: 'exact', head: true }).eq('is_dismissed', false).eq('is_read', false);
+  if (userId) query = query.eq('user_id', userId);
+  const { count, error } = await query;
   if (error) throw error;
   return count || 0;
 }
 
-export async function markNotificationRead(id) {
-  const { error } = await supabase.from('notifications').update({ is_read: true }).eq('id', id);
+export async function markNotificationRead(id, userId) {
+  let query = supabase.from('notifications').update({ is_read: true }).eq('id', id);
+  if (userId) query = query.eq('user_id', userId);
+  const { error } = await query;
   if (error) throw error;
 }
 
-export async function dismissNotification(id) {
-  const { error } = await supabase.from('notifications').update({ is_dismissed: true }).eq('id', id);
+export async function dismissNotification(id, userId) {
+  let query = supabase.from('notifications').update({ is_dismissed: true }).eq('id', id);
+  if (userId) query = query.eq('user_id', userId);
+  const { error } = await query;
   if (error) throw error;
 }
 
@@ -73,14 +81,14 @@ export async function showDesktopNotification(notification) {
   } catch (_) { return false; }
 }
 
-export function subscribeToNotifications(onChange) {
-  const channel = supabase.channel(`shop-camzon-notifications-${Date.now()}`)
-    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' }, payload => {
+export function subscribeToNotifications(onChange, userId) {
+  const channel = supabase.channel(`shop-camzon-notifications-${userId || 'all'}-${Date.now()}`)
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: userId ? `user_id=eq.${userId}` : undefined }, payload => {
       onChange?.(payload);
       if (payload.new) showDesktopNotification(payload.new);
     })
-    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'notifications' }, payload => onChange?.(payload))
-    .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'notifications' }, payload => onChange?.(payload))
+    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'notifications', filter: userId ? `user_id=eq.${userId}` : undefined }, payload => onChange?.(payload))
+    .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'notifications', filter: userId ? `user_id=eq.${userId}` : undefined }, payload => onChange?.(payload))
     .subscribe();
   return channel;
 }
