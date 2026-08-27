@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Shop Camzon — Notification Center</title>
+<style>
+:root{font-family:Inter,system-ui,-apple-system,Segoe UI,sans-serif;color:#172033;background:#f5f7fb}*{box-sizing:border-box}body{margin:0}.wrap{max-width:1100px;margin:auto;padding:28px}.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:22px}.top h1{margin:0;font-size:28px}.grid{display:grid;grid-template-columns:1.1fr .9fr;gap:20px}.card{background:#fff;border:1px solid #e5e9f2;border-radius:18px;padding:22px;box-shadow:0 8px 30px #1720330b}.field{margin-bottom:16px}label{display:block;font-weight:700;margin-bottom:7px}input,select,textarea{width:100%;border:1px solid #d8deea;border-radius:10px;padding:11px 12px;font:inherit;background:#fff}textarea{min-height:125px;resize:vertical}.row{display:grid;grid-template-columns:1fr 1fr;gap:12px}.btn{border:0;border-radius:11px;padding:12px 18px;font-weight:800;cursor:pointer}.primary{background:#111827;color:white}.muted{color:#687386;font-size:14px}.status{margin-top:14px;padding:11px;border-radius:10px;display:none}.ok{background:#eaf8ef;color:#176534}.err{background:#fff0f0;color:#a51d2d}.preview{border:1px solid #e5e9f2;border-radius:16px;overflow:hidden;background:#fff}.preview img{width:100%;height:190px;object-fit:cover;background:#eef1f6}.preview-body{padding:18px}.preview h2{margin:0 0 9px;font-size:19px}.preview p{margin:0 0 16px;line-height:1.5;color:#526075;white-space:pre-wrap}.action{display:inline-block;background:#111827;color:#fff;padding:9px 14px;border-radius:9px;font-weight:700}.small{font-size:12px}.loading{opacity:.65}@media(max-width:800px){.grid,.row{grid-template-columns:1fr}.wrap{padding:16px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<div class="top"><div><h1>🔔 Notification Center</h1><div class="muted">Send a ready-made notification to a selected Shop Camzon customer.</div></div><button class="btn" onclick="location.href='index.html'">← Admin</button></div>
+<div class="grid">
+<section class="card">
+<div class="field"><label for="customer">👤 Select Customer</label><select id="customer"><option value="">Loading customers…</option></select><div class="muted small">No UUID needs to be entered manually.</div></div>
+<div class="field"><label for="template">📋 Notification Template</label><select id="template"><option value="">Loading templates…</option></select></div>
+<div class="field" id="orderField" style="display:none"><label for="order">📦 Select Order</label><select id="order"><option value="">Select an order</option></select></div>
+<div class="field"><label for="title">Title</label><input id="title"></div>
+<div class="field"><label for="message">Message</label><textarea id="message"></textarea></div>
+<div class="row"><div class="field"><label for="type">Type</label><input id="type"></div><div class="field"><label for="actionLabel">Action label</label><input id="actionLabel"></div></div>
+<div class="field"><label for="actionUrl">Action URL</label><input id="actionUrl"></div>
+<div class="field"><label for="imageUrl">🖼️ Image URL</label><input id="imageUrl"></div>
+<button id="send" class="btn primary">🚀 Send Notification</button><div id="status" class="status"></div>
+</section>
+<section class="card"><h2 style="margin-top:0">👀 Preview</h2><div class="preview"><img id="previewImg" alt="Notification image"><div class="preview-body"><h2 id="previewTitle">Notification title</h2><p id="previewMessage">Your notification preview will appear here.</p><span id="previewAction" class="action">Action</span></div></div></section>
+</div></div>
+<script src="../js/supabase.js"></script>
+<script>
+const $=id=>document.getElementById(id);let customers=[],templates=[],orders=[];
+function esc(v){return String(v??'').replace(/[&<>\"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#039;'}[m]))}
+function selectedCustomer(){return customers.find(c=>c.id===$("customer").value)}
+function fillPreview(){
+ $('previewTitle').textContent=$('title').value||'Notification title';$('previewMessage').textContent=$('message').value||'Your notification preview will appear here.';$('previewAction').textContent=$('actionLabel').value||'Action';$('previewAction').style.display=$('actionLabel').value?'inline-block':'none';$('previewImg').src=$('imageUrl').value||'https://shopcamzon.com/favicon.png';
+}
+function replaceVars(text){const c=selectedCustomer()||{};const o=orders.find(x=>x.id===$("order").value)||{};return String(text||'').replaceAll('{customer_name}',c.full_name||c.name||c.username||c.email||'Customer').replaceAll('{order_id}',o.id||'').replaceAll('{product_name}',o.product_name||'').replaceAll('{order_total}',o.total_amount||o.total||'').replaceAll('{delivery_address}',o.delivery_address||'')}
+async function init(){
+ const {data:{session}}=await supabase.auth.getSession();if(!session){location.href='login.html';return}
+ const {data:admins}=await supabase.from('admins').select('id,is_active,role').eq('id',session.user.id).eq('is_active',true).limit(1);if(!admins?.length){location.href='login.html';return}
+ const [cr,tr]=await Promise.all([supabase.from('profiles').select('id,full_name,email,username,name').order('full_name',{ascending:true}),supabase.from('notification_templates').select('*').eq('is_active',true).order('name')]);
+ if(cr.error)return show(cr.error.message,true);if(tr.error)return show(tr.error.message,true);customers=cr.data||[];templates=tr.data||[];
+ $('customer').innerHTML='<option value="">Choose a customer…</option>'+customers.map(c=>`<option value="${esc(c.id)}">${esc(c.full_name||c.name||c.username||c.email||c.id)}${c.email?' — '+esc(c.email):''}</option>`).join('');$('template').innerHTML='<option value="">Choose a template…</option>'+templates.map(t=>`<option value="${esc(t.id)}">${esc(t.name)}</option>`).join('');
+}
+async function loadOrders(){const id=$('customer').value;if(!id){$('orderField').style.display='none';orders=[];return}const {data,error}=await supabase.from('orders').select('*').eq('user_id',id).order('created_at',{ascending:false});if(error){show(error.message,true);return}orders=data||[];$('orderField').style.display=orders.length?'block':'none';$('order').innerHTML='<option value="">Select an order…</option>'+orders.map(o=>`<option value="${esc(o.id)}">#${esc(o.id)}${o.total_amount?' — '+esc(o.total_amount):''}</option>`).join('');}
+$('customer').addEventListener('change',async()=>{await loadOrders();applyTemplate()});$('template').addEventListener('change',applyTemplate);$('order').addEventListener('change',applyTemplate);['title','message','type','actionLabel','actionUrl','imageUrl'].forEach(id=>$(id).addEventListener('input',fillPreview));
+function applyTemplate(){const t=templates.find(x=>x.id==$('template').value);if(!t)return;$('title').value=replaceVars(t.title);$('message').value=replaceVars(t.message);$('type').value=t.type||'info';$('actionLabel').value=replaceVars(t.action_label||'');$('actionUrl').value=replaceVars(t.action_url||'');$('imageUrl').value=t.image_url||'';fillPreview()}
+function show(msg,err=false){$('status').textContent=msg;$('status').className='status '+(err?'err':'ok');$('status').style.display='block'}
+$('send').addEventListener('click',async()=>{const c=selectedCustomer();if(!c)return show('Please select a customer.',true);if(!$('title').value||!$('message').value)return show('Please provide a title and message.',true);$('send').disabled=true;const payload={user_id:c.id,title:$('title').value,message:$('message').value,type:$('type').value||'info',action_label:$('actionLabel').value||null,action_url:$('actionUrl').value||null,image_url:$('imageUrl').value||null};const {error}=await supabase.from('notifications').insert(payload);$('send').disabled=false;if(error)return show(error.message,true);show('Notification sent successfully to '+(c.full_name||c.name||c.email||'customer')+' ✅')});
+init();
+</script></body></html>
