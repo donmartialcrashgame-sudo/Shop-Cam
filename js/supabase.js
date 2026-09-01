@@ -3,7 +3,12 @@ import { SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } from './config.js';
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 
-// Load the voice-call UI after this module has finished initializing.
+// Shared Shop Camzon enhancements: voice-call UI + in-page Customer Care chat.
 if (typeof window !== 'undefined') {
-  setTimeout(() => import('./voice-call-auto.js').catch(() => {}), 0);
+  setTimeout(() => {
+    import('./voice-call-auto.js').catch(() => {});
+    import('./customer-care-drawer.js').then(({ mountCustomerCareDrawer }) => {
+      try { mountCustomerCareDrawer(); } catch (_) {}
+    }).catch(() => {});
+  }, 0);
 }
